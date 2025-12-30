@@ -9,7 +9,7 @@ class JacobianTransformation(ThreeDScene):
         # 1. Trackers & Constants
         u_tracker = ValueTracker(0.0)
         v_tracker = ValueTracker(0.0)
-        ds = 1.0 
+        ds = 0.5
         
         # INDEPENDENT SETTINGS
         # Change these values freely; they won't break the other frame.
@@ -82,82 +82,103 @@ class JacobianTransformation(ThreeDScene):
 
         vec_u_2d = always_redraw(lambda: Arrow(
             get_uv_pt(u_tracker.get_value(), v_tracker.get_value()),
-            get_uv_pt(u_tracker.get_value() + 1, v_tracker.get_value()),
+            get_uv_pt(u_tracker.get_value() + ds, v_tracker.get_value()),
             color=YELLOW, buff=0, stroke_width=4
         ))
         
         vec_v_2d = always_redraw(lambda: Arrow(
             get_uv_pt(u_tracker.get_value(), v_tracker.get_value()),
-            get_uv_pt(u_tracker.get_value(), v_tracker.get_value() + 1),
+            get_uv_pt(u_tracker.get_value(), v_tracker.get_value() + ds),
             color=PINK, buff=0, stroke_width=4
         ))
 
-        # 3D Patch & Tangent Vectors
-        patch_3d = always_redraw(lambda: Polygon(
-            get_xyz_pt(u_tracker.get_value(), v_tracker.get_value()),
-            # Point 2: Start + Vector U
-            get_xyz_pt(u_tracker.get_value(), v_tracker.get_value()) + 
-                (get_xyz_pt(u_tracker.get_value() + ds, v_tracker.get_value()) - 
-                get_xyz_pt(u_tracker.get_value(), v_tracker.get_value())),
-            # Point 3: Start + Vector U + Vector V (The true parallelogram corner)
-            get_xyz_pt(u_tracker.get_value(), v_tracker.get_value()) + 
-                (get_xyz_pt(u_tracker.get_value() + ds, v_tracker.get_value()) - 
-                get_xyz_pt(u_tracker.get_value(), v_tracker.get_value())) +
-                (get_xyz_pt(u_tracker.get_value(), v_tracker.get_value() + ds) - 
-                get_xyz_pt(u_tracker.get_value(), v_tracker.get_value())),
-            # Point 4: Start + Vector V
-            get_xyz_pt(u_tracker.get_value(), v_tracker.get_value()) + 
-                (get_xyz_pt(u_tracker.get_value(), v_tracker.get_value() + ds) - 
-                get_xyz_pt(u_tracker.get_value(), v_tracker.get_value())),
-            fill_opacity=0.8, fill_color=GREEN, stroke_color=WHITE, stroke_width=1
-        ))
+        # 1. Helper to compute the tangent plane points (Linearization)
+        def get_tangent_data():
+            u = u_tracker.get_value()
+            v = v_tracker.get_value()
+            z = k * np.exp(-(u**2 + v**2) / sigma)
+            
+            # Partial derivatives (slopes at the current point)
+            f_u = z * (-2 * u / sigma)
+            f_v = z * (-2 * v / sigma)
+            
+            # Point 1: The start point on the surface
+            p_start = axes_3d.c2p(u, v, z)
+            
+            # Point 2: Move ds along the tangent slope in U
+            p_u_end = axes_3d.c2p(u + ds, v, z + f_u * ds)
+            
+            # Point 3: Move ds along the tangent slope in V
+            p_v_end = axes_3d.c2p(u, v + ds, z + f_v * ds)
+            
+            # Point 4: The far corner of the parallelogram
+            p_corner = axes_3d.c2p(u + ds, v + ds, z + f_u * ds + f_v * ds)
+            
+            return p_start, p_u_end, p_v_end, p_corner
 
+        # 2. Updated Arrows (using the linearized end-points)
         vec_u_3d = always_redraw(lambda: Arrow(
-            get_xyz_pt(u_tracker.get_value(), v_tracker.get_value()),
-            get_xyz_pt(u_tracker.get_value() + 1, v_tracker.get_value()),
+            get_tangent_data()[0], get_tangent_data()[1], 
             color=YELLOW, buff=0, stroke_width=4
         ))
 
         vec_v_3d = always_redraw(lambda: Arrow(
-            get_xyz_pt(u_tracker.get_value(), v_tracker.get_value()),
-            get_xyz_pt(u_tracker.get_value(), v_tracker.get_value() + 1),
+            get_tangent_data()[0], get_tangent_data()[2], 
             color=PINK, buff=0, stroke_width=4
         ))
 
-        # 1. Group all 3D elements
-        three_d_elements = Group(axes_3d, surface, patch_3d, vec_u_3d, vec_v_3d)
+        # 3. Updated Patch (order: start -> u_end -> corner -> v_end)
+        patch_3d = always_redraw(lambda: Polygon(
+            get_tangent_data()[0], 
+            get_tangent_data()[1], 
+            get_tangent_data()[3], 
+            get_tangent_data()[2],
+            fill_opacity=0.8, fill_color=GREEN, stroke_color=WHITE, stroke_width=1
+        ))
+
+        # Define the full vector first
+        def get_normal_vector():
+            u = u_tracker.get_value()
+            v = v_tracker.get_value()
+            # These are the components: grad z = <-z_u, -z_v, 1> * ds
+            # For z = k * exp(-(u^2+v^2)/sigma)
+            comp_x = (2 * k * u / sigma) * np.exp(-(u**2 + v**2) / sigma) * ds
+            comp_y = (2 * k * v / sigma) * np.exp(-(u**2 + v**2) / sigma) * ds
+            return np.array([comp_x, comp_y, ds])
+        
+        # Use it for the Arrow
+        vec_n_3d = always_redraw(lambda: Arrow(
+            get_xyz_pt(u_tracker.get_value(), v_tracker.get_value()),
+            get_xyz_pt(u_tracker.get_value(), v_tracker.get_value()) + (
+                axes_3d.c2p(*get_normal_vector()) - axes_3d.c2p(0, 0, 0)
+            ),
+            color=WHITE, buff=0, stroke_width=2
+        ))
+
+        # Group all 3D elements
+        three_d_elements = Group(axes_3d, surface, patch_3d, vec_u_3d, vec_v_3d, vec_n_3d)
 
         # 6. UI & CAMERA
         self.set_camera_orientation(phi=80 * DEGREES, theta=60 * DEGREES)
         
         jac_label = MathTex(
-            r"\|\mathbf{r}_u \times \mathbf{r}_v\| = ", 
+            r"\|\mathbf{r}_u \times \mathbf{r}_v\|\; dS = ", 
             font_size=8
         )
-        #.next_to(axes_3d, RIGHT, buff=0.1)
 
         # Define the math formulas
         surf_eq = MathTex(r"\mathbf{r}(u, v) = \langle u, v, k e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
         partial_u = MathTex(r"\mathbf{r}_u = \langle 1, 0, -\frac{2ku}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
         partial_v = MathTex(r"\mathbf{r}_v = \langle 0, 1, -\frac{2kv}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
-        # cross_prod = MathTex(r"\mathbf{r}_u \times \mathbf{r}_v = \langle 2ku/\sigma e^{-(u^2 + v^2)}, 2kv/\sigma e^{-(u^2 + v^2)}, 1 \rangle", font_size=8)
-
+    
         # Arrange them in a column
         formula_stack = VGroup(surf_eq, partial_u, partial_v, jac_label).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
 
         # Position the stack above your existing jac_label
         formula_stack.next_to(axes_3d, RIGHT, buff=0.1)
-            #jac_label, UP, buff=0.1)
-
-        # Calculate the numerical value of the Jacobian magnitude
-        def get_jac_mag():
-            u = u_tracker.get_value()
-            v = v_tracker.get_value()
-            e = np.exp(-2*(u**2 + v**2)/sigma)
-            return np.sqrt(4 / sigma**2 * k** 2 * e * u**2 + 4 / sigma**2 * k**2 * e * v**2 + 1)
 
         jac_num_value = always_redraw(lambda: DecimalNumber(
-            get_jac_mag(),
+            np.linalg.norm(get_normal_vector()), # Re-uses the vector to find length
             num_decimal_places=3,
             font_size=8
         ).next_to(jac_label, RIGHT, buff=0.1))
@@ -167,9 +188,7 @@ class JacobianTransformation(ThreeDScene):
         self.add_fixed_in_frame_mobjects(uv_frame, patch_2d, vec_u_2d, vec_v_2d, jac_label, jac_num_value, formula_stack)
         
         # 3D elements go in world space
-        # self.add(axes_3d, surface, patch_3d, vec_u_3d, vec_v_3d)
         self.add(three_d_elements)
-        
         
         # 8. ANIMATE
         rt = 10
