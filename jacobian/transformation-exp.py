@@ -172,7 +172,7 @@ class JacobianTransformation(ThreeDScene):
         
         
         # 8. ANIMATE
-        rt = 2
+        rt = 10
         self.play(u_tracker.animate.set_value(1.0), v_tracker.animate.set_value(1.0), run_time=rt)
         self.play(u_tracker.animate.set_value(-1.0), run_time=rt)
         self.wait(5)
