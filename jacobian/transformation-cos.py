@@ -162,9 +162,13 @@ class JacobianTransformation(ThreeDScene):
             color=PINK, buff=0, stroke_width=4
         ))
 
-        vec_n_3d = always_redraw(lambda: Arrow(
-            get_surface_geometry()[0], get_surface_geometry()[4],
-            color=WHITE, buff=0, stroke_width=4
+        vec_n_3d = always_redraw(lambda: Arrow3D(
+            start=get_surface_geometry()[0], 
+            end=get_surface_geometry()[4],
+            color=WHITE, 
+            thickness=0.008,
+            base_radius=0.03,
+            height=0.08
         ))
 
         patch_3d = always_redraw(lambda: Polygon(
