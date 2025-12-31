@@ -1,15 +1,49 @@
 from manim import *
 import numpy as np
 
+###############################################################
+SIM_TIME = 10
+#
 # Exponential z = k exp(-(x^2+y^2)/sigma)
 #
+k = 3.0
+sigma = 2.0
+def f_vals(u, v):
+    # function value
+    z = k * np.exp(-(u**2 + v**2)/sigma)
+    # Partial Derivatives
+    f_u = z * (-2 * u / sigma)
+    f_v = z * (-2 * v / sigma)
+    return z, f_u, f_v
 #
+
+# the u-v range to plot
+U_RANGE = [-2,2]
+V_RANGE = [-2,2]
+
+# the 3-d ranges for the 3d-axes
+# NOTE:  x,y,z must have same range/length ratio for the normal vector to look orthogonal
+X_RANGE=[-3, 3, 1]
+Y_RANGE=[-3, 3, 1]
+Z_RANGE=[-2, 4, 1]   
+
+# u-v area element size
+ds = 1.0
+
+# Define the math formulas
+const_eq = MathTex(r"dS = "+str(ds)+ ", k = "+str(k)+ ", \sigma = "+str(sigma), font_size=8)
+surf_eq = MathTex(r"\mathbf{r}(u, v) = \langle u, v, k e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
+partial_u = MathTex(r"\mathbf{r}_u = \langle 1, 0, -\frac{2ku}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
+partial_v = MathTex(r"\mathbf{r}_v = \langle 0, 1, -\frac{2kv}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
+#
+##############################################################
+
+
 class JacobianTransformation(ThreeDScene):
     def construct(self):
         # Trackers & Constants
         u_tracker = ValueTracker(0.0)
         v_tracker = ValueTracker(0.0)
-        ds = 1.0
         
         # INDEPENDENT SETTINGS
         uv_scale = 0.15
@@ -69,7 +103,7 @@ class JacobianTransformation(ThreeDScene):
         xyz_scale = 0.2
 
         axes_3d = ThreeDAxes(
-            x_range=[-3, 3, 1], y_range=[-3, 3, 1], z_range=[-2, 4, 1],   
+            x_range=X_RANGE, y_range=Y_RANGE, z_range=Z_RANGE,   
             # NOTE:  x,y,z must have same range/length ratio for the normal vector to look orthogonal
             x_length=10, y_length=10, z_length=10
         ).scale(xyz_scale)
@@ -79,15 +113,13 @@ class JacobianTransformation(ThreeDScene):
         axes_3d.move_to(ORIGIN)
 
         # SURFACE
-        k = 3.0
-        sigma = 2.0
         def get_xyz_pt(u, v):
-            z = k * np.exp(-(u**2 + v**2)/sigma)
+            z = f_vals(u,v)[0]
             return axes_3d.c2p(u, v, z)
 
         surface = Surface(
             lambda u, v: get_xyz_pt(u, v),
-            u_range=[-2,2], v_range=[-2, 2],
+            u_range=U_RANGE, v_range=V_RANGE,
             resolution=(30, 30), fill_opacity=0.3,
             checkerboard_colors=[BLUE_D, BLUE_E]
         )
@@ -97,12 +129,12 @@ class JacobianTransformation(ThreeDScene):
             u = u_tracker.get_value()
             v = v_tracker.get_value()
             
+            func_vals = f_vals(u,v)
             # Surface Height
-            z = k * np.exp(-(u**2 + v**2) / sigma)
-            
+            z = func_vals[0]
             # Slopes (Partial Derivatives)
-            f_u = z * (-2 * u / sigma)
-            f_v = z * (-2 * v / sigma)
+            f_u = func_vals[1]
+            f_v = func_vals[2]
             
             # Points in World Space
             p_start = axes_3d.c2p(u, v, z)
@@ -148,12 +180,6 @@ class JacobianTransformation(ThreeDScene):
 
         # UI & CAMERA
         self.set_camera_orientation(phi=70 * DEGREES, theta= 60 * DEGREES)
-        
-        # Define the math formulas
-        const_eq = MathTex(r"dS = "+str(ds)+ ", k = "+str(k)+ ", \sigma = "+str(sigma), font_size=8)
-        surf_eq = MathTex(r"\mathbf{r}(u, v) = \langle u, v, k e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
-        partial_u = MathTex(r"\mathbf{r}_u = \langle 1, 0, -\frac{2ku}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
-        partial_v = MathTex(r"\mathbf{r}_v = \langle 0, 1, -\frac{2kv}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
 
         # the Jacobian 
         jac_label = MathTex(r"\|\mathbf{r}_u \times \mathbf{r}_v\|\; dS = ", font_size=8)
@@ -175,7 +201,7 @@ class JacobianTransformation(ThreeDScene):
         self.add(three_d_elements)
         
         # ANIMATE
-        rt = 10
+        rt = SIM_TIME
         self.play(u_tracker.animate.set_value(1.0), v_tracker.animate.set_value(1.0), run_time=rt)
         self.play(u_tracker.animate.set_value(-1.0), run_time=rt)
         self.play(u_tracker.animate.set_value(0.0), v_tracker.animate.set_value(0.0), run_time=rt)
