@@ -1,5 +1,16 @@
 from manim import *
 import numpy as np
+import logging
+
+# Manim 0.12.0's own DecimalNumber implementation internally calls its
+# deprecated set_submobjects() on every rebuild (numbers.py), which spams
+# this warning every frame for any always_redraw'd DecimalNumber. Filter
+# out just that message; real warnings still get through.
+class _SuppressSetSubmobjectsDeprecation(logging.Filter):
+    def filter(self, record):
+        return "OpenGLMobject.set_submobjects" not in record.getMessage()
+
+logging.getLogger("manim").addFilter(_SuppressSetSubmobjectsDeprecation())
 
 ###############################################################
 SIM_TIME = 10
@@ -31,7 +42,7 @@ Z_RANGE=[-2, 4, 1]
 ds = 1.0
 
 # Define the math formulas
-const_eq = MathTex(r"dS = "+str(ds)+ ", k = "+str(k)+ ", \sigma = "+str(sigma), font_size=8)
+const_eq = MathTex(r"dS = "+str(ds)+ ", k = "+str(k)+ r", \sigma = "+str(sigma), font_size=8)
 surf_eq = MathTex(r"\mathbf{r}(u, v) = \langle u, v, k e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
 partial_u = MathTex(r"\mathbf{r}_u = \langle 1, 0, -\frac{2ku}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
 partial_v = MathTex(r"\mathbf{r}_v = \langle 0, 1, -\frac{2kv}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
@@ -92,7 +103,7 @@ class JacobianTransformation(ThreeDScene):
             get_uv_pt(u_tracker.get_value() + ds, v_tracker.get_value()),
             color=YELLOW, buff=0, stroke_width=4
         ))
-        
+
         vec_v_2d = always_redraw(lambda: Arrow(
             get_uv_pt(u_tracker.get_value(), v_tracker.get_value()),
             get_uv_pt(u_tracker.get_value(), v_tracker.get_value() + ds),
@@ -120,15 +131,25 @@ class JacobianTransformation(ThreeDScene):
         surface = Surface(
             lambda u, v: get_xyz_pt(u, v),
             u_range=U_RANGE, v_range=V_RANGE,
-            resolution=(30, 30), fill_opacity=0.3,
+            resolution=(20, 20), fill_opacity=0.3,
             checkerboard_colors=[BLUE_D, BLUE_E]
         )
 
         # THE UNIFIED BRAIN
+        # Cached per (u, v): several always_redraw mobjects below (vec_u_3d,
+        # vec_v_3d, vec_n_3d, patch_3d, jac_num_value) each call this once
+        # per frame, but u/v don't change mid-frame, so recomputing every
+        # time is pure waste.
+        _geometry_cache = {}
         def get_surface_geometry():
             u = u_tracker.get_value()
             v = v_tracker.get_value()
-            
+
+            cache_key = (u, v)
+            if cache_key in _geometry_cache:
+                return _geometry_cache[cache_key]
+            _geometry_cache.clear()
+
             func_vals = f_vals(u,v)
             # Surface Height
             z = func_vals[0]
@@ -148,8 +169,10 @@ class JacobianTransformation(ThreeDScene):
             # The displacement vector in Manim world-space
             n_dir = axes_3d.c2p(*raw_n) - axes_3d.c2p(0, 0, 0)
             p_n_end = p_start + n_dir
-            
-            return p_start, p_u_end, p_v_end, p_corner, p_n_end, raw_n
+
+            result = (p_start, p_u_end, p_v_end, p_corner, p_n_end, raw_n)
+            _geometry_cache[cache_key] = result
+            return result
 
         # SYNCHRONIZED OBJECTS
         vec_u_3d = always_redraw(lambda: Arrow(
@@ -186,7 +209,7 @@ class JacobianTransformation(ThreeDScene):
         self.set_camera_orientation(phi=70 * DEGREES, theta= 60 * DEGREES)
 
         # the Jacobian 
-        jac_label = MathTex(r"\|\mathbf{r}_u \times \mathbf{r}_v\|\; dS = ", font_size=8)
+        jac_label = MathTex(r"\Vert\mathbf{r}_u \times \mathbf{r}_v\Vert\; dS = ", font_size=8)
         jac_num_value = always_redraw(lambda: DecimalNumber(
             np.linalg.norm(get_surface_geometry()[5]), # Re-uses the vector to find length
             num_decimal_places=3,
@@ -200,7 +223,7 @@ class JacobianTransformation(ThreeDScene):
         # ADD TO SCENE
         # 2D elements go in fixed_in_frame
         self.add_fixed_in_frame_mobjects(uv_frame, patch_2d, vec_u_2d, vec_v_2d, jac_label, jac_num_value, formula_stack)
-        
+
         # 3D elements go in world space
         self.add(three_d_elements)
         
