@@ -42,7 +42,7 @@ Z_RANGE=[-2, 4, 1]
 ds = 1.0
 
 # Define the math formulas
-const_eq = MathTex(r"dS = "+str(ds)+ ", k = "+str(k)+ r", \sigma = "+str(sigma), font_size=8)
+const_eq = MathTex(r"dA = "+str(ds)+ ", k = "+str(k)+ r", \sigma = "+str(sigma), font_size=8)
 surf_eq = MathTex(r"\mathbf{r}(u, v) = \langle u, v, k e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
 partial_u = MathTex(r"\mathbf{r}_u = \langle 1, 0, -\frac{2ku}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
 partial_v = MathTex(r"\mathbf{r}_v = \langle 0, 1, -\frac{2kv}{\sigma} e^{-(u^2 + v^2)/\sigma} \rangle", font_size=8)
@@ -209,7 +209,7 @@ class JacobianTransformation(ThreeDScene):
         self.set_camera_orientation(phi=70 * DEGREES, theta= 60 * DEGREES)
 
         # the Jacobian 
-        jac_label = MathTex(r"\Vert\mathbf{r}_u \times \mathbf{r}_v\Vert\; dS = ", font_size=8)
+        jac_label = MathTex(r"\Vert\mathbf{r}_u \times \mathbf{r}_v\Vert\; dA = ", font_size=8)
         jac_num_value = always_redraw(lambda: DecimalNumber(
             np.linalg.norm(get_surface_geometry()[5]), # Re-uses the vector to find length
             num_decimal_places=3,
